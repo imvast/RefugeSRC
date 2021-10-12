@@ -1,0 +1,199 @@
+# Imports
+import discord, pymongo, os, random
+from colorama import Fore as C
+from settings import *
+from discord.ext import commands
+
+# Connect to MongoDB
+mongoClient = pymongo.MongoClient(os.environ.get('BOT_DB'))
+db = mongoClient.get_database("refuge").get_collection("server-data")
+db2 = mongoClient['refuge']
+antitoggle = db2['antitoggle']
+blacklist = db2['blacklist']
+gprefix = db['prefix']
+limits = db2['limits']
+
+def blacklist_check():
+    def predicate(ctx):
+        author_id = ctx.author.id
+        if blacklist.find_one({'user_id': author_id}):
+            return False
+        return True
+    return commands.check(predicate)
+    
+
+class Limits(commands.Cog):
+    def __init__(self, client):
+        self.client = client
+        self.db = db
+        self.colour = discord.Colour.random()
+        print(f"{C.CYAN}[Status] Cog Loaded: Limits" + C.RESET)
+
+
+    @commands.group(
+      name="limit",
+      aliases=["limits"],
+      invoke_without_command=True,
+      case_insensitive=True
+    )
+    @commands.cooldown(1, 2, commands.BucketType.channel)
+    @blacklist_check()
+    async def limit(self, ctx):
+      extras = self.db.find_one({'guild_id': ctx.guild.id})['prefix']
+      if ctx.message.author.id == ctx.guild.owner.id:
+        embed = discord.Embed(title="Setting Anti Limits", description="[Max Limit: `50`]\nTo get started with Anti limits, there is one command that you will use: `" + ' and '.join(extras) + "limit set <type> <amount>`", colour=self.colour)
+        embed.add_field(
+          name="Types",
+          value="A list of current changeable limits. Make sure to use the exact word and spelling when changing for there to be no issues.\nUsage: `" + ' and '.join(extras) + "limit types`"
+        )
+        embed.add_field(
+          name="Set",
+          value="Sets the limit of the chosen anti feature. Usage: `" + ' and '.join(extras) + "limit set <type> <limit/amount>`\nExample: `" + ' and '.join(extras) + "limit set bans 10`"
+        )
+        await ctx.send(embed=embed)
+      else:
+        await ctx.send(embed=not_server_owner_msg())
+
+
+    @limit.command(
+      name="types",
+      case_insensitive=True
+    )
+    @blacklist_check()
+    async def limit_types(self, ctx):
+      if ctx.message.author.id == ctx.guild.owner.id:
+        embed = discord.Embed(
+          title="Limit Types (BETA)", 
+          description="```・ Bans   | anti-ban\n・ Kicks  | anti-kick\n・ Chan+  | anti-channel-create\n・ Chan-  | anti-channel-delete\n・ Role+  | anti-role-create\n・ Role-  | anti-role-delete```", 
+          colour=self.colour
+        )
+        await ctx.send(embed=embed)
+      else:
+        await ctx.reply(embed=not_server_owner_msg(), delete_after=15)
+
+
+    @limit.group(
+      name="set",
+      description="Sets a limit for an anti.",
+      case_insensitive=True
+    )
+    @commands.cooldown(1, 2, commands.BucketType.channel)
+    @blacklist_check()
+    async def limit_set(self, ctx):
+      if ctx.message.author.id == ctx.guild.owner.id:
+        pass
+      else:
+        await ctx.send(embed=not_server_owner_msg())
+
+    @limit_set.command(
+      name="bans"
+    )
+    @blacklist_check()
+    async def limit_set_bans(self, ctx, new_limit: int):
+      if new_limit >= 51:
+        return await ctx.send(embed=create_error_embed("The max limit is currently 50. Why would you even want it higher? lol"))
+      if ctx.message.author.id == ctx.guild.owner.id:
+        type = "Bans"
+        try:
+          limits.update_one({'guild_id': ctx.guild.id},{'$set': {'bans_limit': new_limit}})
+          await ctx.send(embed=create_embed(f'{type} Limit has been set to: **{new_limit}**'))
+        except Exception as e:
+          await ctx.send(f"There was an error while setting limits for: `{type}`")
+          raise e
+      else:
+        await ctx.send(embed=not_server_owner_msg())
+
+    @limit_set.command(
+      name="kicks"
+    )
+    @blacklist_check()
+    async def limit_set_kicks(self, ctx, new_limit: int):
+      if new_limit >= 51:
+        return await ctx.send(embed=create_error_embed("The max limit is currently 50. Why would you even want it higher? lol"))
+      if ctx.message.author.id == ctx.guild.owner.id:
+        type = "Kicks"
+        try:
+          limits.update_one({'guild_id': ctx.guild.id},{'$set': {'kicks_limit': new_limit}})
+          await ctx.send(embed=create_embed(f'{type} Limit has been set to: **{new_limit}**'))
+        except Exception as e:
+          await ctx.send(f"There was an error while setting limits for: `{type}`")
+          raise e
+      else:
+        await ctx.send(embed=not_server_owner_msg())
+
+    @limit_set.command(
+      name="chan+"
+    )
+    @blacklist_check()
+    async def limit_set_chan(self, ctx, new_limit: int):
+      if new_limit >= 51:
+        return await ctx.send(embed=create_error_embed("The max limit is currently 50. Why would you even want it higher? lol"))
+      if ctx.message.author.id == ctx.guild.owner.id:
+        type = "Channel Creation"
+        try:
+          limits.update_one({'guild_id': ctx.guild.id},{'$set': {'channel_create_limit': new_limit}})
+          await ctx.send(embed=create_embed(f'{type} Limit has been set to: **{new_limit}**'))
+        except Exception as e:
+          await ctx.send(f"There was an error while setting limits for: `{type}`")
+          raise e
+      else:
+        await ctx.send(embed=not_server_owner_msg())
+
+    @limit_set.command(
+      name="chan-"
+    )
+    @blacklist_check()
+    async def limit_set_chan_(self, ctx, new_limit: int):
+      if new_limit >= 51:
+        return await ctx.send(embed=create_error_embed("The max limit is currently 50. Why would you even want it higher? lol"))
+      if ctx.message.author.id == ctx.guild.owner.id:
+        type = "Channel Deletion"
+        try:
+          limits.update_one({'guild_id': ctx.guild.id},{'$set': {'channel_delete_limit': new_limit}})
+          await ctx.send(embed=create_embed(f'{type} Limit has been set to: **{new_limit}**'))
+        except Exception as e:
+          await ctx.send(f"There was an error while setting limits for: `{type}`")
+          raise e
+      else:
+        await ctx.send(embed=not_server_owner_msg())
+
+    @limit_set.command(
+      name="role+"
+    )
+    @blacklist_check()
+    async def limit_set_role(self, ctx, new_limit: int):
+      if new_limit >= 51:
+        return await ctx.send(embed=create_error_embed("The max limit is currently 50. Why would you even want it higher? lol"))
+      if ctx.message.author.id == ctx.guild.owner.id:
+        type = "Role Creation"
+        try:
+          limits.update_one({'guild_id': ctx.guild.id},{'$set': {'role_create_limit': new_limit}})
+          await ctx.send(embed=create_embed(f'{type} Limit has been set to: **{new_limit}**'))
+        except Exception as e:
+          await ctx.send(f"There was an error while setting limits for: `{type}`")
+          raise e
+      else:
+        await ctx.send(embed=not_server_owner_msg())
+
+    @limit_set.command(
+      name="role-"
+    )
+    @blacklist_check()
+    async def limit_set_role_(self, ctx, new_limit: int):
+      if new_limit >= 51:
+        return await ctx.send(embed=create_error_embed("The max limit is currently 50. Why would you even want it higher? lol"))
+      if ctx.message.author.id == ctx.guild.owner.id:
+        type = "Role Deletion"
+        try:
+          limits.update_one({'guild_id': ctx.guild.id},{'$set': {'role_delete_limit': new_limit}})
+          await ctx.send(embed=create_embed(f'{type} Limit has been set to: **{new_limit}**'))
+        except Exception as e:
+          await ctx.send(f"There was an error while setting limits for: `{type}`")
+          raise e
+      else:
+        await ctx.send(embed=not_server_owner_msg())
+
+
+
+def setup(client):
+    client.add_cog(Limits(client))
